@@ -1,21 +1,42 @@
 name: CRT Monitor
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '*/15 * * * *' # Runs every 15 minutes
   workflow_dispatch:
 
 jobs:
   monitor:
     runs-on: ubuntu-latest
     steps:
-      - name: Download crtmon
+      - name: Check Certificates
         run: |
-          wget https://github.com/ind3p3nd3nt/crtmon/releases/latest/download/crtmon-linux-amd64 -O crtmon
-          chmod +x crtmon
+          # Setup environment variables
+          echo "BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> $GITHUB_ENV
+          echo "CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}" >> $GITHUB_ENV
+          
+          # Install required tool (jq)
+          sudo apt-get install -y jq
 
-      - name: Create Config
-        run: |
-          echo "${{ secrets.CRT_CONFIG }}" > provider.yaml
+          # Define Targets
+          TARGETS=("sensay.io")
 
-      - name: Run Monitor
-        run: ./crtmon -config provider.yaml -notify telegram
+          # Check each target
+          for TARGET in "${TARGETS[@]}"; do
+            echo "Checking $TARGET..."
+            
+            # Fetch latest certificates from crt.sh
+            RESPONSE=$(curl -s "https://crt.sh/?q=${TARGET}&output=json")
+            
+            # Parse JSON to find latest certificate
+            LATEST_CERT=$(echo "$RESPONSE" | jq -r '.[0] | .name_value')
+            
+            if [ -n "$LATEST_CERT" ]; then
+               echo "Found certificate for $TARGET"
+               # Send Notification
+               curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
+                 -d "chat_id=$CHAT_ID" \
+                 -d "text=🔔 New Certificate Detected for $TARGET%0A%0ADomain: $LATEST_CERT%0A%0ACheck: https://crt.sh/?q=$TARGET"
+            else
+               echo "No new certificates found."
+            fi
+          done
