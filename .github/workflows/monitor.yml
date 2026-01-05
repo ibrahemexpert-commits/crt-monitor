@@ -1,0 +1,21 @@
+name: CRT Monitor
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download crtmon
+        run: |
+          wget https://github.com/ind3p3nd3nt/crtmon/releases/latest/download/crtmon-linux-amd64 -O crtmon
+          chmod +x crtmon
+
+      - name: Create Config
+        run: |
+          echo "${{ secrets.CRT_CONFIG }}" > provider.yaml
+
+      - name: Run Monitor
+        run: ./crtmon -config provider.yaml -notify telegram
